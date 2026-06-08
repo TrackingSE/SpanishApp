@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { DebugPanel } from './DebugPanel';
+import { useAppStore } from '../store/useAppStore';
+import { computeLevels } from '../lib/levels';
 
 const navItems = [
   { to: '/today', label: 'Today' },
@@ -9,6 +11,9 @@ const navItems = [
 ];
 
 export function Layout() {
+  const course = useAppStore((s) => s.course());
+  const state = useAppStore((s) => s.state);
+  const { currentLevel } = computeLevels(course, state);
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-20 border-b border-ink-300 bg-paper/90 backdrop-blur">
@@ -20,7 +25,7 @@ export function Layout() {
             <span className="font-serif text-lg font-semibold tracking-tight text-ink-900">
               Field Spanish
             </span>
-            <span className="tag tag-ink hidden sm:inline-flex">A1</span>
+            <span className="tag tag-ink hidden sm:inline-flex">{currentLevel}</span>
           </NavLink>
 
           <nav className="flex items-center gap-1">

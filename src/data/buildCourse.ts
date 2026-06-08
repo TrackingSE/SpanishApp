@@ -1,19 +1,23 @@
 import type {
+  Assessment,
+  CEFRLevel,
+  CEFRLevelDef,
   Course,
   Flashcard,
+  GrammarPattern,
   InputTask,
   InputTaskType,
   OutputTask,
   OutputTaskType,
   SkillNode,
+  Unit,
   VocabItem,
 } from '../types';
-import { nodeSeeds, units } from './units';
-import { grammar } from './grammar';
-import { vocab } from './vocab';
+import { levelBundles } from './spanish';
+import type { NodeSeed } from './spanish/types';
 
-// Assembles the full course from authored vocab + grammar + node seeds.
-// Flashcards and most tasks are generated deterministically so ids are stable
+// Assembles the full A1 -> C2 course from per-level content bundles.
+// Flashcards and tasks are generated deterministically so ids stay stable
 // across reloads (progress persistence keys on card / task ids).
 
 // ---------------------------------------------------------------------------
@@ -51,10 +55,14 @@ function withAnswer(answer: string, distrs: string[], slot: number) {
 }
 
 // ---------------------------------------------------------------------------
-// flashcard generation
+// flashcard generation (per level)
 // ---------------------------------------------------------------------------
 
-function buildFlashcards(): Flashcard[] {
+function buildFlashcards(
+  bundleVocab: VocabItem[],
+  bundleGrammar: GrammarPattern[],
+  nodeSeeds: NodeSeed[],
+): Flashcard[] {
   const cards: Flashcard[] = [];
   const grammarNode = new Map<string, string>();
   for (const seed of nodeSeeds) {
@@ -62,9 +70,9 @@ function buildFlashcards(): Flashcard[] {
       if (!grammarNode.has(gid)) grammarNode.set(gid, seed.id);
     }
   }
+  const fallbackNode = nodeSeeds[0]?.id ?? '';
 
-  vocab.forEach((v, i) => {
-    // 1) recognition (word)
+  bundleVocab.forEach((v, i) => {
     cards.push({
       id: `vr-${v.id}`,
       nodeId: v.nodeId,
@@ -74,7 +82,6 @@ function buildFlashcards(): Flashcard[] {
       back: v.english,
     });
 
-    // 2) production (word) for a third of items (keeps >50% of cards sentence-based)
     if (i % 3 === 0) {
       cards.push({
         id: `vp-${v.id}`,
@@ -86,7 +93,6 @@ function buildFlashcards(): Flashcard[] {
       });
     }
 
-    // 3) a sentence card (cloze or translation) — keeps >50% sentence-based
     const cloze = i % 2 === 0 ? makeCloze(v.example.target, v.spanish) : null;
     if (cloze) {
       cards.push({
@@ -109,7 +115,6 @@ function buildFlashcards(): Flashcard[] {
       });
     }
 
-    // 4) audio-placeholder comprehension for set phrases
     if (v.pos === 'phrase') {
       cards.push({
         id: `ac-${v.id}`,
@@ -122,7 +127,6 @@ function buildFlashcards(): Flashcard[] {
       });
     }
 
-    // 5) question-answer comprehension for questions
     if (v.example.target.trim().startsWith('¿')) {
       cards.push({
         id: `qa-${v.id}`,
@@ -135,18 +139,17 @@ function buildFlashcards(): Flashcard[] {
     }
   });
 
-  // grammar pattern cards
-  grammar.forEach((gp) => {
-    const nodeId = grammarNode.get(gp.id) ?? 'greetings';
-    gp.examples.forEach((ex, j) => {
+  bundleGrammar.forEach((gp) => {
+    const nodeId = grammarNode.get(gp.id) ?? fallbackNode;
+    gp.examples.forEach((exItem, j) => {
       cards.push({
         id: `gp-${gp.id}-${j + 1}`,
         nodeId,
         type: 'grammar_pattern',
         prompt: `Pattern: ${gp.pattern}`,
-        front: ex.native,
-        back: ex.target,
-        sentence: ex.target,
+        front: exItem.native,
+        back: exItem.target,
+        sentence: exItem.target,
       });
     });
   });
@@ -155,7 +158,7 @@ function buildFlashcards(): Flashcard[] {
 }
 
 // ---------------------------------------------------------------------------
-// task generation
+// task generation (per level)
 // ---------------------------------------------------------------------------
 
 const INPUT_TYPES: InputTaskType[] = ['reading', 'dialogue', 'message', 'sign', 'menu', 'travel', 'listening'];
@@ -170,10 +173,12 @@ const OUTPUT_TYPES: OutputTaskType[] = [
   'travel_problem',
 ];
 
-function buildInputTasks(nodeVocab: Map<string, VocabItem[]>): InputTask[] {
-  const englishPool = vocab.map((v) => v.english);
-  const spanishPool = vocab.map((v) => v.spanish);
-
+function buildInputTasks(
+  nodeSeeds: NodeSeed[],
+  nodeVocab: Map<string, VocabItem[]>,
+  englishPool: string[],
+  spanishPool: string[],
+): InputTask[] {
   return nodeSeeds.map((seed, idx) => {
     const items = (nodeVocab.get(seed.id) ?? []).slice(0, 5);
     const type = INPUT_TYPES[idx % INPUT_TYPES.length];
@@ -204,35 +209,39 @@ function buildInputTasks(nodeVocab: Map<string, VocabItem[]>): InputTask[] {
   });
 }
 
-function outputPrompt(type: OutputTaskType, item: VocabItem, node: SkillNode): string {
+function outputPrompt(type: OutputTaskType, item: VocabItem, seed: NodeSeed): string {
   switch (type) {
     case 'translate':
       return `Write this in Spanish: "${item.example.native}"`;
     case 'write_sentence':
       return `Write one sentence in Spanish using "${item.spanish}" (${item.english}).`;
     case 'answer_question':
-      return `Answer in Spanish in a full sentence: how does "${node.goal}" apply to you?`;
+      return `Answer in Spanish in a full sentence: how does "${seed.goal}" apply to you?`;
     case 'describe':
-      return `Describe it in Spanish in one sentence. Use the word "${item.spanish}".`;
+      return `Describe it in Spanish in one or two sentences. Use the word "${item.spanish}".`;
     case 'order_food':
-      return 'You are at a café. In Spanish, order a coffee and ask for the bill.';
+      return 'You are at a café. In Spanish, order something and ask for the bill.';
     case 'ask_directions':
-      return 'In Spanish, ask a stranger where the train station is.';
+      return 'In Spanish, ask a stranger how to get somewhere and confirm the way.';
     case 'roleplay':
-      return `Role-play in Spanish: react to a situation about ${node.title.toLowerCase()}.`;
+      return `Role-play in Spanish: react to a real situation about ${seed.title.toLowerCase()}.`;
     case 'travel_problem':
-      return 'Your hotel key does not work. Explain the problem in Spanish at reception.';
+      return 'Something has gone wrong (booking, delay or fault). Explain the problem in Spanish and ask for a fix.';
   }
 }
 
-function buildOutputTasks(nodeVocab: Map<string, VocabItem[]>): OutputTask[] {
+function buildOutputTasks(
+  nodeSeeds: NodeSeed[],
+  nodeVocab: Map<string, VocabItem[]>,
+  grammarById: Map<string, GrammarPattern>,
+): OutputTask[] {
   return nodeSeeds.map((seed, idx) => {
     const items = nodeVocab.get(seed.id) ?? [];
-    const node = items[0];
-    const item = items.find((v) => v.pos === 'verb' || v.pos === 'phrase') ?? node;
+    const first = items[0];
+    const item = items.find((v) => v.pos === 'verb' || v.pos === 'phrase') ?? first;
     const type = OUTPUT_TYPES[idx % OUTPUT_TYPES.length];
     const patterns = seed.grammarIds
-      .map((gid) => grammar.find((g) => g.id === gid)?.title)
+      .map((gid) => grammarById.get(gid)?.title)
       .filter((t): t is string => Boolean(t))
       .slice(0, 2);
     const keywords = items.slice(0, 3).map((v) => v.spanish.replace(/[¿?]/g, '').trim());
@@ -242,7 +251,7 @@ function buildOutputTasks(nodeVocab: Map<string, VocabItem[]>): OutputTask[] {
       nodeId: seed.id,
       title: `${seed.title}: write`,
       type,
-      prompt: outputPrompt(type, item, { ...seed, position: { col: 0, row: 0 }, vocabularyIds: [], flashcardIds: [], inputTaskIds: [], outputTaskIds: [], level: 'A1' }),
+      prompt: outputPrompt(type, item, seed),
       minWords: 4,
       expectedPatterns: patterns,
       targetKeywords: keywords,
@@ -251,7 +260,7 @@ function buildOutputTasks(nodeVocab: Map<string, VocabItem[]>): OutputTask[] {
   });
 }
 
-// A few richer hand-authored anchor tasks for variety / realism.
+// A few richer hand-authored anchor tasks for variety / realism (A1).
 const anchorInputTasks: InputTask[] = [
   {
     id: 'in-anchor-cafe',
@@ -300,68 +309,125 @@ const anchorInputTasks: InputTask[] = [
 // ---------------------------------------------------------------------------
 
 function buildCourse(): Course {
-  const nodeVocab = new Map<string, VocabItem[]>();
-  for (const v of vocab) {
-    const list = nodeVocab.get(v.nodeId) ?? [];
-    list.push(v);
-    nodeVocab.set(v.nodeId, list);
-  }
+  const allUnits: Unit[] = [];
+  const allNodes: SkillNode[] = [];
+  const allGrammar: GrammarPattern[] = [];
+  const allVocab: VocabItem[] = [];
+  const allFlashcards: Flashcard[] = [];
+  const allInputTasks: InputTask[] = [];
+  const allOutputTasks: OutputTask[] = [];
+  const assessments: Assessment[] = [];
+  const levelDefs: CEFRLevelDef[] = [];
 
-  const flashcards = buildFlashcards();
-  const inputTasks = [...buildInputTasks(nodeVocab), ...anchorInputTasks];
-  const outputTasks = buildOutputTasks(nodeVocab);
+  // Global vocab pools for distractors (built up across levels).
+  const englishPool: string[] = levelBundles.flatMap((b) => b.vocab.map((v) => v.english));
+  const spanishPool: string[] = levelBundles.flatMap((b) => b.vocab.map((v) => v.spanish));
 
-  // reverse-map grammar -> nodes
-  const grammarNodes = new Map<string, string[]>();
-  for (const seed of nodeSeeds) {
-    for (const gid of seed.grammarIds) {
-      const list = grammarNodes.get(gid) ?? [];
-      list.push(seed.id);
-      grammarNodes.set(gid, list);
+  for (const bundle of levelBundles) {
+    const nodeVocab = new Map<string, VocabItem[]>();
+    for (const v of bundle.vocab) {
+      const list = nodeVocab.get(v.nodeId) ?? [];
+      list.push(v);
+      nodeVocab.set(v.nodeId, list);
     }
+
+    const grammarById = new Map(bundle.grammar.map((g) => [g.id, g]));
+
+    const flashcards = buildFlashcards(bundle.vocab, bundle.grammar, bundle.nodeSeeds);
+    const isA1 = bundle.level === 'A1';
+    const inputTasks = [
+      ...buildInputTasks(bundle.nodeSeeds, nodeVocab, englishPool, spanishPool),
+      ...(isA1 ? anchorInputTasks : []),
+    ];
+    const outputTasks = buildOutputTasks(bundle.nodeSeeds, nodeVocab, grammarById);
+
+    // reverse-map grammar -> nodes within this level
+    const grammarNodes = new Map<string, string[]>();
+    for (const seed of bundle.nodeSeeds) {
+      for (const gid of seed.grammarIds) {
+        const list = grammarNodes.get(gid) ?? [];
+        list.push(seed.id);
+        grammarNodes.set(gid, list);
+      }
+    }
+    const grammarWithNodes = bundle.grammar.map((g) => ({
+      ...g,
+      nodeIds: grammarNodes.get(g.id) ?? [],
+    }));
+
+    const unitOrder = new Map(bundle.units.map((u) => [u.id, u.order]));
+    const colCounter = new Map<string, number>();
+
+    const nodes: SkillNode[] = bundle.nodeSeeds.map((seed) => {
+      const col = colCounter.get(seed.unitId) ?? 0;
+      colCounter.set(seed.unitId, col + 1);
+      return {
+        id: seed.id,
+        unitId: seed.unitId,
+        title: seed.title,
+        goal: seed.goal,
+        level: seed.level ?? bundle.level,
+        prerequisites: seed.prerequisites,
+        grammarIds: seed.grammarIds,
+        vocabularyIds: (nodeVocab.get(seed.id) ?? []).map((v) => v.id),
+        flashcardIds: flashcards.filter((c) => c.nodeId === seed.id).map((c) => c.id),
+        inputTaskIds: inputTasks.filter((t) => t.nodeId === seed.id).map((t) => t.id),
+        outputTaskIds: outputTasks.filter((t) => t.nodeId === seed.id).map((t) => t.id),
+        position: { col, row: (unitOrder.get(seed.unitId) ?? 1) - 1 },
+        critical: seed.critical,
+      };
+    });
+
+    allUnits.push(...bundle.units);
+    allNodes.push(...nodes);
+    allGrammar.push(...grammarWithNodes);
+    allVocab.push(...bundle.vocab);
+    allFlashcards.push(...flashcards);
+    allInputTasks.push(...inputTasks);
+    allOutputTasks.push(...outputTasks);
+    assessments.push(bundle.assessment);
+
+    levelDefs.push({
+      id: bundle.level,
+      title: bundle.title,
+      description: bundle.description,
+      canDoGoals: bundle.canDoGoals,
+      unitIds: bundle.units.map((u) => u.id),
+      skillNodeIds: bundle.nodeSeeds.map((s) => s.id),
+      finalAssessmentId: bundle.assessment.id,
+      passRequirements: bundle.assessment.passThresholds,
+    });
   }
-  const grammarWithNodes = grammar.map((g) => ({ ...g, nodeIds: grammarNodes.get(g.id) ?? [] }));
-
-  // unit order -> row, index within unit -> col
-  const unitOrder = new Map(units.map((u) => [u.id, u.order]));
-  const colCounter = new Map<string, number>();
-
-  const nodes: SkillNode[] = nodeSeeds.map((seed) => {
-    const col = colCounter.get(seed.unitId) ?? 0;
-    colCounter.set(seed.unitId, col + 1);
-    return {
-      id: seed.id,
-      unitId: seed.unitId,
-      title: seed.title,
-      goal: seed.goal,
-      level: 'A1',
-      prerequisites: seed.prerequisites,
-      grammarIds: seed.grammarIds,
-      vocabularyIds: (nodeVocab.get(seed.id) ?? []).map((v) => v.id),
-      flashcardIds: flashcards.filter((c) => c.nodeId === seed.id).map((c) => c.id),
-      inputTaskIds: inputTasks.filter((t) => t.nodeId === seed.id).map((t) => t.id),
-      outputTaskIds: outputTasks.filter((t) => t.nodeId === seed.id).map((t) => t.id),
-      position: { col, row: (unitOrder.get(seed.unitId) ?? 1) - 1 },
-    };
-  });
 
   return {
-    id: 'es-a1',
+    id: 'es-full',
     targetLanguage: 'Spanish',
     nativeLanguage: 'English',
     level: 'A1',
-    theme: 'Travel and daily life',
-    title: 'Spanish A1 foundation',
-    units,
-    nodes,
-    grammar: grammarWithNodes,
-    vocab,
-    flashcards,
-    inputTasks,
-    outputTasks,
+    theme: 'Full CEFR path',
+    title: 'Spanish A1–C2 path',
+    units: allUnits,
+    nodes: allNodes,
+    grammar: allGrammar,
+    vocab: allVocab,
+    flashcards: allFlashcards,
+    inputTasks: allInputTasks,
+    outputTasks: allOutputTasks,
+    levels: levelDefs,
+    assessments,
   };
 }
 
-export const spanishA1: Course = buildCourse();
-export const courses: Record<string, Course> = { [spanishA1.id]: spanishA1 };
-export const defaultCourse = spanishA1;
+export const spanishCourse: Course = buildCourse();
+
+// Helpers used across the app.
+export function levelDef(course: Course, level: CEFRLevel): CEFRLevelDef | undefined {
+  return course.levels.find((l) => l.id === level);
+}
+
+export function assessmentForLevel(course: Course, level: CEFRLevel): Assessment | undefined {
+  return course.assessments.find((a) => a.levelId === level);
+}
+
+export const courses: Record<string, Course> = { [spanishCourse.id]: spanishCourse };
+export const defaultCourse = spanishCourse;

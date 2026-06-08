@@ -65,6 +65,7 @@ export interface Unit {
   title: string;
   goal: string;
   order: number;
+  level: CEFRLevel;
 }
 
 export interface SkillNode {
@@ -81,6 +82,8 @@ export interface SkillNode {
   inputTaskIds: string[];
   outputTaskIds: string[];
   position: { col: number; row: number };
+  /** Critical skills must clear a higher floor for the level to pass. */
+  critical?: boolean;
 }
 
 export interface VocabItem {
@@ -168,6 +171,196 @@ export interface Course {
   flashcards: Flashcard[];
   inputTasks: InputTask[];
   outputTasks: OutputTask[];
+  /** Full CEFR ladder A1 -> C2. */
+  levels: CEFRLevelDef[];
+  /** One final assessment per level. */
+  assessments: Assessment[];
+}
+
+// ---------------------------------------------------------------------------
+// CEFR level structure
+// ---------------------------------------------------------------------------
+
+/** Hard pass requirements for a level (Part 4). */
+export interface PassRequirements {
+  /** Average mastery across the level's skill nodes. */
+  skillAverageMastery: number;
+  /** No critical skill may sit below this. */
+  criticalSkillMin: number;
+  /** Final assessment overall score. */
+  assessmentMin: number;
+  listeningMin: number;
+  readingMin: number;
+  writingMin: number;
+  grammarVocabMin: number;
+  speakingRequired: boolean;
+  maxUnresolvedWeakAreas: number;
+}
+
+export interface CEFRLevelDef {
+  id: CEFRLevel;
+  title: string;
+  /** Plain, practical description of what the level means in real life. */
+  description: string;
+  canDoGoals: string[];
+  unitIds: string[];
+  skillNodeIds: string[];
+  finalAssessmentId: string;
+  passRequirements: PassRequirements;
+}
+
+// ---------------------------------------------------------------------------
+// Assessments
+// ---------------------------------------------------------------------------
+
+export type AssessmentSectionId =
+  | 'vocabulary'
+  | 'grammar'
+  | 'reading'
+  | 'listening'
+  | 'writing'
+  | 'speaking';
+
+export type WeaknessType =
+  | 'vocabulary'
+  | 'grammar'
+  | 'listening'
+  | 'reading'
+  | 'writing'
+  | 'production'
+  | 'recall_speed';
+
+export type AssessmentQuestionType =
+  | 'vocab_production'
+  | 'sentence_completion'
+  | 'cloze'
+  | 'sentence_correction'
+  | 'transformation'
+  | 'error_spotting'
+  | 'reading_comprehension'
+  | 'listening_comprehension'
+  | 'writing_response'
+  | 'speaking_prompt';
+
+/** Per-question outcome, set by the learner or derived from the answer. */
+export type QuestionResult =
+  | 'correct'
+  | 'incorrect'
+  | 'guessed'
+  | 'unknown'
+  | 'skipped'
+  | 'flagged';
+
+export interface AssessmentQuestion {
+  id: string;
+  section: AssessmentSectionId;
+  type: AssessmentQuestionType;
+  prompt: string;
+  /** Reading text or listening transcript (listening is an audio placeholder). */
+  passage?: string;
+  audioPlaceholder?: boolean;
+  /** Canonical free-text answer (accent/case-insensitive compare). */
+  expectedAnswer?: string;
+  acceptedAnswers?: string[];
+  /** Optional multiple-choice options; tests avoid being MC-only. */
+  options?: string[];
+  answerIndex?: number;
+  distractors?: string[];
+  /** Writing tasks: rule-based scoring hints. */
+  requiredKeywords?: string[];
+  requiredPatterns?: string[];
+  minWords?: number;
+  skillNodeIds: string[];
+  vocabularyIds: string[];
+  grammarIds: string[];
+  difficulty: number;
+  cefrLevel: CEFRLevel;
+  weaknessType: WeaknessType;
+  feedback: string;
+  explanation: string;
+}
+
+export interface AssessmentSection {
+  id: AssessmentSectionId;
+  title: string;
+  instructions: string;
+  questionIds: string[];
+}
+
+export interface Assessment {
+  id: string;
+  levelId: CEFRLevel;
+  title: string;
+  sections: AssessmentSection[];
+  questions: AssessmentQuestion[];
+  passThresholds: PassRequirements;
+}
+
+export interface AssessmentAnswer {
+  questionId: string;
+  userAnswer: string;
+  result: QuestionResult;
+  markedUnknown: boolean;
+  markedGuessed: boolean;
+  flagged: boolean;
+  timeSpentSeconds: number;
+}
+
+export interface DiagnosticReport {
+  passedAreas: string[];
+  weakAreas: string[];
+  blockingAreas: string[];
+  recommendedSkillNodeIds: string[];
+  recommendedCardIds: string[];
+  recommendedInputTaskIds: string[];
+  recommendedOutputTaskIds: string[];
+  retestEligible: boolean;
+  /** Plain-voice summary lines shown to the learner. */
+  summary: string[];
+  /** Concrete concepts the learner marked unknown. */
+  unknownConcepts: string[];
+}
+
+export interface AssessmentAttempt {
+  id: string;
+  assessmentId: string;
+  levelId: CEFRLevel;
+  startedAt: string;
+  completedAt: string;
+  score: number;
+  sectionScores: Record<string, number>;
+  answers: AssessmentAnswer[];
+  passed: boolean;
+  diagnosticReport: DiagnosticReport;
+}
+
+// ---------------------------------------------------------------------------
+// Level progress (runtime)
+// ---------------------------------------------------------------------------
+
+export type LevelStatus =
+  | 'locked'
+  | 'assumed'
+  | 'current'
+  | 'repair'
+  | 'test_ready'
+  | 'passed';
+
+export interface LevelProgress {
+  levelId: CEFRLevel;
+  status: LevelStatus;
+  mastery: number;
+  /** Plain labels of weak areas surfaced by the last diagnostic. */
+  weakAreas: string[];
+  failedAreas: string[];
+  /** Skill nodes added to the plan as repair work. */
+  repairNodeIds: string[];
+  lastAttemptId: string | null;
+  attemptsCount: number;
+  /** Study sessions completed since the last failed test. */
+  repairSessionsSince: number;
+  /** Test stays blocked until study-session count reaches this. */
+  retestBlockedUntilSessions: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +372,11 @@ export interface UserProfile {
   targetLanguage: string;
   nativeLanguage: string;
   goal: string;
+  /** Level the learner selected during onboarding (placement). */
+  startingLevel: CEFRLevel;
+  /** Level the learner is actively working on now. */
   level: CEFRLevel;
+  /** Daily study budget in minutes: 15 | 30 | 60 | 120. */
   dailyMinutes: number;
   courseId: string;
   createdAt: string;
@@ -209,6 +406,10 @@ export interface NodeProgress {
   outputPassed: boolean;
   productionScore: number;
   cardsSeen: number;
+  /** Belongs to a level the learner placed past — assumed known. */
+  assumed: boolean;
+  /** Diagnostic flagged this node for repair even though assumed. */
+  repair: boolean;
 }
 
 export interface DailyStat {
@@ -224,14 +425,53 @@ export interface AppState {
   profile: UserProfile | null;
   cards: Record<string, CardProgress>;
   nodes: Record<string, NodeProgress>;
+  levels: Record<string, LevelProgress>;
+  attempts: Record<string, AssessmentAttempt>;
   stats: Record<string, DailyStat>;
+  /** Monotonic counter of completed study sessions (for retest gating). */
+  studySessions: number;
 }
 
 // ---------------------------------------------------------------------------
-// Today plan
+// Study plan
 // ---------------------------------------------------------------------------
 
 export type TaskKind = 'review' | 'lesson' | 'input' | 'output';
+
+export type StudyTaskType =
+  | 'review'
+  | 'lesson'
+  | 'repair'
+  | 'input'
+  | 'output'
+  | 'diagnostic'
+  | 'level_test'
+  | 'recap';
+
+export interface StudyTask {
+  id: string;
+  type: StudyTaskType;
+  title: string;
+  estimatedMinutes: number;
+  priority: number;
+  /** Plain reason this task appears today. */
+  reason: string;
+  /** What finishing it moves toward. */
+  unlocks: string;
+  linkedSkillNodeId?: string;
+  to: string;
+}
+
+export interface StudyPlan {
+  date: string;
+  selectedMinutes: number;
+  tasks: StudyTask[];
+  mainTarget: string;
+  blockingNextLevel: string[];
+  explanation: string;
+  overloadedWithReviews: boolean;
+  estimatedMinutes: number;
+}
 
 export interface TodayItem {
   kind: TaskKind;

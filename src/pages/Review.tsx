@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
@@ -43,9 +43,11 @@ export function Review() {
   const course = useAppStore((s) => s.course());
   const state = useAppStore((s) => s.state);
   const rateCard = useAppStore((s) => s.rateCard);
+  const recordReviewSession = useAppStore((s) => s.recordReviewSession);
+  const sessionLogged = useRef(false);
 
-  const initialQueue = useRef<string[] | null>(null);
-  if (initialQueue.current === null) {
+  // Build the review queue once, on first render (lazy state initializer).
+  const [initialIds] = useState<string[]>(() => {
     let cards: Flashcard[];
     if (nodeId) {
       const node = course.nodes.find((n) => n.id === nodeId);
@@ -62,11 +64,11 @@ export function Review() {
       const db = isDue(state.cards[b.id]?.due ?? new Date().toISOString()) ? 0 : 1;
       return da - db;
     });
-    initialQueue.current = cards.map((c) => c.id);
-  }
+    return cards.map((c) => c.id);
+  });
 
-  const total = initialQueue.current.length;
-  const [queue, setQueue] = useState<string[]>(initialQueue.current);
+  const total = initialIds.length;
+  const [queue, setQueue] = useState<string[]>(initialIds);
   const [revealed, setRevealed] = useState(false);
   const [typed, setTyped] = useState('');
   const [done, setDone] = useState(0);
@@ -75,6 +77,14 @@ export function Review() {
   const node = nodeId ? course.nodes.find((n) => n.id === nodeId) : null;
   const card = course.flashcards.find((c) => c.id === queue[0]);
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 0;
+
+  // Log one completed review session (counts toward retest repair, Part 7).
+  useEffect(() => {
+    if (total > 0 && queue.length === 0 && done > 0 && !sessionLogged.current) {
+      sessionLogged.current = true;
+      recordReviewSession();
+    }
+  }, [total, queue.length, done, recordReviewSession]);
 
   const answerCorrect = useMemo(() => {
     if (!card) return false;

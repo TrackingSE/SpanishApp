@@ -4,15 +4,18 @@ import type { AppState } from '../types';
 // narrow (load / save) so it can be swapped for IndexedDB later without
 // touching the store or UI.
 
-const STORAGE_KEY = 'linguamap.state.v1';
-export const STATE_VERSION = 1;
+const STORAGE_KEY = 'linguamap.state.v2';
+export const STATE_VERSION = 2;
 
 export const emptyState: AppState = {
   version: STATE_VERSION,
   profile: null,
   cards: {},
   nodes: {},
+  levels: {},
+  attempts: {},
   stats: {},
+  studySessions: 0,
 };
 
 export function loadState(): AppState {
@@ -20,7 +23,7 @@ export function loadState(): AppState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(emptyState);
-    const parsed = JSON.parse(raw) as AppState;
+    const parsed = JSON.parse(raw) as Partial<AppState>;
     if (!parsed || typeof parsed !== 'object') return structuredClone(emptyState);
     // Shallow migration guard: ensure required buckets exist.
     return {
@@ -28,7 +31,10 @@ export function loadState(): AppState {
       profile: parsed.profile ?? null,
       cards: parsed.cards ?? {},
       nodes: parsed.nodes ?? {},
+      levels: parsed.levels ?? {},
+      attempts: parsed.attempts ?? {},
       stats: parsed.stats ?? {},
+      studySessions: parsed.studySessions ?? 0,
     };
   } catch {
     return structuredClone(emptyState);

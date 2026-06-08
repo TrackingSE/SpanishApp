@@ -5,10 +5,13 @@ import { Layout } from './components/Layout';
 import { Onboarding } from './pages/Onboarding';
 import { Today } from './pages/Today';
 import { Roadmap } from './pages/Roadmap';
+import { LevelDetail } from './pages/LevelDetail';
 import { Lesson } from './pages/Lesson';
 import { Review } from './pages/Review';
 import { InputTask } from './pages/InputTask';
 import { OutputTask } from './pages/OutputTask';
+import { Assessment } from './pages/Assessment';
+import { Diagnostic } from './pages/Diagnostic';
 import { Settings } from './pages/Settings';
 
 export default function App() {
@@ -43,10 +46,13 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/today" element={<Today />} />
         <Route path="/roadmap" element={<Roadmap />} />
+        <Route path="/level/:levelId" element={<LevelDetail />} />
         <Route path="/lesson/:nodeId" element={<Lesson />} />
         <Route path="/review" element={<Review />} />
         <Route path="/input/:taskId" element={<InputTask />} />
         <Route path="/output/:taskId" element={<OutputTask />} />
+        <Route path="/assessment/:levelId" element={<Assessment />} />
+        <Route path="/diagnostic/:attemptId" element={<Diagnostic />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to={onboarded ? '/today' : '/onboarding'} replace />} />

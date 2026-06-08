@@ -56,7 +56,8 @@ export function Settings() {
             <Row label="Language" value={profile.targetLanguage} />
             <Row label="First language" value={profile.nativeLanguage} />
             <Row label="Goal" value={profile.goal} />
-            <Row label="Starting level" value={profile.level} />
+            <Row label="Starting level" value={profile.startingLevel} />
+            <Row label="Current level" value={profile.level} />
             <Row label="Time per day" value={`${profile.dailyMinutes} min`} />
             <Row label="Started" value={new Date(profile.createdAt).toLocaleDateString()} />
           </dl>

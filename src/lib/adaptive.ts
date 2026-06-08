@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { accuracyFromRatings, cardMastery, createCardProgress } from './srs';
 import { isDue } from './date';
+import { ASSUMED_MASTERY, computeLevels, nodeLevelGate } from './levels';
 
 // Adaptive progression.
 //
@@ -60,6 +61,8 @@ export function createNodeProgress(nodeId: string, status: NodeStatus): NodeProg
     outputPassed: false,
     productionScore: 0,
     cardsSeen: 0,
+    assumed: false,
+    repair: false,
   };
 }
 
@@ -160,7 +163,33 @@ export function recomputeAll(course: Course, state: AppState, ref: Date = new Da
     }
   }
 
-  return { ...withProgress, nodes };
+  // Level gating overlay. Locked levels lock their nodes; assumed levels mark
+  // nodes as assumed (placed/known) unless flagged for repair.
+  const { byLevel, status } = computeLevels(course, { ...withProgress, nodes });
+  const repairSet = new Set(
+    Object.values(byLevel).flatMap((lp) => lp.repairNodeIds),
+  );
+
+  for (const node of course.nodes) {
+    const np = nodes[node.id];
+    const gate = nodeLevelGate(node, status, repairSet);
+    if (gate === 'locked') {
+      nodes[node.id] = { ...np, status: 'locked', assumed: false, repair: false };
+    } else if (gate === 'assumed') {
+      const studied = np.cardsSeen > 0;
+      nodes[node.id] = {
+        ...np,
+        assumed: true,
+        repair: false,
+        status: studied ? np.status : 'passed',
+        mastery: studied ? Math.max(np.mastery, ASSUMED_MASTERY) : ASSUMED_MASTERY,
+      };
+    } else {
+      nodes[node.id] = { ...np, assumed: false, repair: repairSet.has(node.id) };
+    }
+  }
+
+  return { ...withProgress, nodes, levels: byLevel };
 }
 
 export function isNodeUnlocked(np: NodeProgress | undefined): boolean {
