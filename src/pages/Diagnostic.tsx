@@ -2,12 +2,16 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
+import { Pron } from '../components/Pron';
+import { usePronMode } from '../hooks/usePronMode';
+import { assessmentForLevel } from '../data/buildCourse';
 import { nextLevel } from '../lib/levels';
 
 export function Diagnostic() {
   const { attemptId } = useParams();
   const course = useAppStore((s) => s.course());
   const state = useAppStore((s) => s.state);
+  const pronMode = usePronMode();
 
   const attempt = attemptId ? state.attempts[attemptId] : undefined;
 
@@ -28,6 +32,19 @@ export function Diagnostic() {
   const recNodes = report.recommendedSkillNodeIds
     .map((id) => course.nodes.find((n) => n.id === id))
     .filter((n): n is NonNullable<typeof n> => Boolean(n));
+
+  // Corrections: missed Spanish-answer questions, with the right pronunciation.
+  const assessment = assessmentForLevel(course, level);
+  const corrections = (assessment?.questions ?? [])
+    .map((q) => {
+      const ans = attempt.answers.find((a) => a.questionId === q.id);
+      return ans ? { q, ans } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => Boolean(x))
+    .filter(
+      ({ q, ans }) =>
+        ans.result !== 'correct' && Boolean(q.expectedAnswer) && Boolean(q.expectedAnswerPronunciation),
+    );
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -78,6 +95,37 @@ export function Diagnostic() {
           <Panel title="Marked unknown" tone="ink" items={report.unknownConcepts} empty="" />
         )}
       </div>
+
+      {/* Corrections with pronunciation */}
+      {pronMode !== 'off' && corrections.length > 0 && (
+        <section className="mt-6 card p-5">
+          <h2 className="label">Corrections — say these correctly</h2>
+          <p className="mt-1 text-sm text-ink-600">
+            The right Spanish answer, with how to pronounce it. Items you marked “I don't know” are
+            flagged.
+          </p>
+          <div className="mt-3 divide-y divide-ink-200">
+            {corrections.map(({ q, ans }) => (
+              <div key={q.id} className="py-3 first:pt-0">
+                <p className="text-sm text-ink-600">{q.prompt}</p>
+                <div className="mt-1 flex items-baseline justify-between gap-3">
+                  <p className="font-serif text-lg font-semibold text-ink-900">{q.expectedAnswer}</p>
+                  {ans.markedUnknown && <span className="tag tag-rust shrink-0">you didn't know</span>}
+                </div>
+                <Pron
+                  data={{
+                    pronunciation: q.expectedAnswerPronunciation,
+                    ipa: q.pronunciationHint,
+                    notes: q.pronunciationFocus ? [q.pronunciationFocus] : [],
+                  }}
+                  mode={pronMode}
+                  className="mt-1"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Recommended revision */}
       {!attempt.passed && (

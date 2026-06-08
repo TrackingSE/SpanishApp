@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
 import { NodeTags } from '../components/StatusBadge';
+import { Pron } from '../components/Pron';
 import { blockingPrereqs, isNodeUnlocked } from '../lib/adaptive';
 
 export function Lesson() {
@@ -86,11 +87,21 @@ export function Lesson() {
                   <h3 className="font-serif text-base font-semibold text-ink-900">{g.title}</h3>
                   <p className="mt-1 font-mono text-xs text-ink-600">{g.pattern}</p>
                   <p className="mt-2 text-sm leading-relaxed text-ink-700">{g.explanation}</p>
-                  <ul className="mt-3 space-y-1.5">
+                  <ul className="mt-3 space-y-3">
                     {g.examples.map((ex, i) => (
-                      <li key={i} className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-                        <span className="font-medium text-ink-900">{ex.target}</span>
-                        <span className="text-sm text-ink-500">{ex.native}</span>
+                      <li key={i}>
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+                          <span className="font-medium text-ink-900">{ex.target}</span>
+                          <span className="text-sm text-ink-500">{ex.native}</span>
+                        </div>
+                        <Pron
+                          data={{
+                            pronunciation: ex.pronunciation,
+                            ipa: ex.ipa,
+                            notes: ex.stressNotes ? [ex.stressNotes] : [],
+                          }}
+                          className="mt-1"
+                        />
                       </li>
                     ))}
                   </ul>
@@ -109,9 +120,19 @@ export function Lesson() {
             <h2 className="label">Words ({vocab.length})</h2>
             <ul className="mt-2 divide-y divide-ink-200">
               {vocab.map((v) => (
-                <li key={v.id} className="flex items-baseline justify-between gap-3 py-1.5">
-                  <span className="font-medium text-ink-900">{v.spanish}</span>
-                  <span className="text-right text-sm text-ink-500">{v.english}</span>
+                <li key={v.id} className="flex items-start justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <span className="font-medium text-ink-900">{v.spanish}</span>
+                    <Pron
+                      data={{
+                        pronunciation: v.pronunciation,
+                        ipa: v.ipa,
+                        stress: v.stress ? `stress: ${v.stress}` : undefined,
+                      }}
+                      showNotes={false}
+                    />
+                  </div>
+                  <span className="shrink-0 text-right text-sm text-ink-500">{v.english}</span>
                 </li>
               ))}
             </ul>

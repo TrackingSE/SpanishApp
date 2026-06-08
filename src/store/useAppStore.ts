@@ -6,9 +6,11 @@ import type {
   Course,
   DailyStat,
   LevelProgress,
+  PronunciationSupport,
   Rating,
   TaskKind,
 } from '../types';
+import { defaultSupport } from '../lib/pronunciation';
 import { courses, defaultCourse, assessmentForLevel } from '../data/buildCourse';
 import { emptyState, loadState, saveState, clearState, STATE_VERSION } from '../lib/storage';
 import { ensureProgress, recomputeAll, THRESHOLDS } from '../lib/adaptive';
@@ -40,6 +42,7 @@ interface AppStore {
   recordOutputResult: (taskId: string, nodeId: string, score: number) => void;
   submitAssessment: (levelId: CEFRLevel, answers: AssessmentAnswer[], startedAt: string) => string;
   setDailyMinutes: (minutes: number) => void;
+  setPronunciationSupport: (support: PronunciationSupport) => void;
   resetAll: () => void;
   reseed: () => void;
 
@@ -122,6 +125,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         startingLevel: input.startingLevel,
         level: input.startingLevel,
         dailyMinutes: input.dailyMinutes,
+        pronunciationSupport: defaultSupport(input.startingLevel),
         courseId: course.id,
         createdAt: new Date().toISOString(),
       },
@@ -252,6 +256,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const { state } = get();
     if (!state.profile) return;
     const next = { ...state, profile: { ...state.profile, dailyMinutes: minutes } };
+    set({ state: persist(next) });
+  },
+
+  setPronunciationSupport: (support) => {
+    const { state } = get();
+    if (!state.profile) return;
+    const next = { ...state, profile: { ...state.profile, pronunciationSupport: support } };
     set({ state: persist(next) });
   },
 

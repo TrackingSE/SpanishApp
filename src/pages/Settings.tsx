@@ -4,6 +4,15 @@ import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
 import { getDueCards } from '../lib/today';
 import { STATE_LABEL } from '../lib/adaptive';
+import { computeLevels } from '../lib/levels';
+import { resolveSupport } from '../lib/pronunciation';
+import type { PronunciationSupport } from '../types';
+
+const SUPPORT_OPTIONS: { value: PronunciationSupport; label: string; hint: string }[] = [
+  { value: 'off', label: 'Off', hint: 'No pronunciation shown.' },
+  { value: 'basic', label: 'Basic', hint: 'English-style respelling only.' },
+  { value: 'full', label: 'Full', hint: 'Respelling, IPA, stress and warnings.' },
+];
 
 export function Settings() {
   const navigate = useNavigate();
@@ -11,7 +20,10 @@ export function Settings() {
   const state = useAppStore((s) => s.state);
   const resetAll = useAppStore((s) => s.resetAll);
   const reseed = useAppStore((s) => s.reseed);
+  const setPronunciationSupport = useAppStore((s) => s.setPronunciationSupport);
   const profile = state.profile;
+  const { currentLevel } = computeLevels(course, state);
+  const effectiveSupport = resolveSupport(profile?.pronunciationSupport, currentLevel);
 
   const overall = Math.round(
     course.nodes.reduce((sum, n) => sum + (state.nodes[n.id]?.mastery ?? 0), 0) /
@@ -64,6 +76,35 @@ export function Settings() {
         ) : (
           <p className="mt-2 text-sm text-ink-600">No profile. Finish onboarding first.</p>
         )}
+      </section>
+
+      <section className="mt-6 card p-6">
+        <h2 className="label">Pronunciation support</h2>
+        <p className="mt-1 text-sm text-ink-600">
+          How much written pronunciation to show on words, sentences and answers. Default is Full for
+          A1–A2 and Basic for B1+.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {SUPPORT_OPTIONS.map((opt) => {
+            const active = effectiveSupport === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setPronunciationSupport(opt.value)}
+                className={`rounded-md border p-3 text-left transition ${
+                  active
+                    ? 'border-ink-900 bg-ink-900 text-paper'
+                    : 'border-ink-300 bg-paper-card text-ink-800 hover:border-ink-500'
+                }`}
+              >
+                <span className="block text-sm font-semibold">{opt.label}</span>
+                <span className={`mt-0.5 block text-[11px] ${active ? 'text-paper/80' : 'text-ink-500'}`}>
+                  {opt.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       <section className="mt-6 card p-6">

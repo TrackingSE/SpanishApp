@@ -12,6 +12,7 @@ import { InputTask } from './pages/InputTask';
 import { OutputTask } from './pages/OutputTask';
 import { Assessment } from './pages/Assessment';
 import { Diagnostic } from './pages/Diagnostic';
+import { Pronunciation } from './pages/Pronunciation';
 import { Settings } from './pages/Settings';
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/output/:taskId" element={<OutputTask />} />
         <Route path="/assessment/:levelId" element={<Assessment />} />
         <Route path="/diagnostic/:attemptId" element={<Diagnostic />} />
+        <Route path="/pronunciation" element={<Pronunciation />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to={onboarded ? '/today' : '/onboarding'} replace />} />

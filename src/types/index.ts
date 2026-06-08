@@ -58,7 +58,16 @@ export type OutputTaskType =
 export interface TranslationPair {
   target: string;
   native: string;
+  /** Learner respelling of the target (CAPS = stress), e.g. OH-lah. */
+  pronunciation?: string;
+  /** Broad learner IPA, e.g. /ˈola/. */
+  ipa?: string;
+  /** Short stress / pronunciation note, only when it helps. */
+  stressNotes?: string;
 }
+
+/** Pronunciation support level (Part 7). */
+export type PronunciationSupport = 'off' | 'basic' | 'full';
 
 export interface Unit {
   id: string;
@@ -94,6 +103,22 @@ export interface VocabItem {
   pos: PartOfSpeech;
   example: TranslationPair;
   tags: string[];
+  // Written pronunciation support (Part 1). Populated for every item in
+  // buildCourse via the deterministic generator, so these are never empty.
+  /** Learner respelling of the word, e.g. ehs-tah-SYOHN. */
+  pronunciation?: string;
+  /** Broad learner IPA, e.g. /estaˈsjon/. */
+  ipa?: string;
+  /** Syllable breakdown in normal spelling, e.g. es-ta-ción. */
+  syllables?: string;
+  /** The stressed syllable, e.g. ción. */
+  stress?: string;
+  /** Warnings for common English-speaker mistakes (only when relevant). */
+  pronunciationNotes?: string[];
+  /** Respelling of the example sentence. */
+  examplePronunciation?: string;
+  /** Broad IPA of the example sentence. */
+  exampleIpa?: string;
 }
 
 export interface GrammarPattern {
@@ -121,6 +146,15 @@ export interface Flashcard {
   /** Full target sentence for cloze / translation / pattern cards. */
   sentence?: string;
   hint?: string;
+  // Pronunciation of the Spanish side of the card (Part 1 / Part 2).
+  /** Learner respelling of the Spanish answer. */
+  pronunciation?: string;
+  /** Broad IPA of the Spanish answer. */
+  ipa?: string;
+  /** Short respelling hint, shown only after answering when revealed. */
+  pronunciationHint?: string;
+  /** Reveal pronunciation once the answer is shown. */
+  showPronunciationAfterAnswer?: boolean;
 }
 
 export interface ComprehensionQuestion {
@@ -141,6 +175,12 @@ export interface InputTask {
   targetVocab: string[];
   glossary: { word: string; meaning: string }[];
   questions: ComprehensionQuestion[];
+  // Pronunciation view (Part 2). Line-by-line respelling of the text.
+  textWithPronunciation?: { line: string; pronunciation: string; ipa: string }[];
+  /** Warnings relevant to this text. */
+  pronunciationNotes?: string[];
+  /** Tricky words worth drilling, as "word → respelling". */
+  targetPronunciationPoints?: string[];
 }
 
 export interface OutputTask {
@@ -278,6 +318,13 @@ export interface AssessmentQuestion {
   weaknessType: WeaknessType;
   feedback: string;
   explanation: string;
+  // Pronunciation of the correct Spanish answer, shown in review (Part 2).
+  /** Respelling of the expected Spanish answer. */
+  expectedAnswerPronunciation?: string;
+  /** Broad IPA of the expected Spanish answer. */
+  pronunciationHint?: string;
+  /** The single most relevant pronunciation warning for this answer. */
+  pronunciationFocus?: string;
 }
 
 export interface AssessmentSection {
@@ -378,6 +425,8 @@ export interface UserProfile {
   level: CEFRLevel;
   /** Daily study budget in minutes: 15 | 30 | 60 | 120. */
   dailyMinutes: number;
+  /** Pronunciation support level. Undefined = auto by level (Part 7). */
+  pronunciationSupport?: PronunciationSupport;
   courseId: string;
   createdAt: string;
 }

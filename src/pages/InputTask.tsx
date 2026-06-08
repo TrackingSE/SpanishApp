@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
+import { usePronMode } from '../hooks/usePronMode';
 import { THRESHOLDS } from '../lib/adaptive';
 
 interface Token {
@@ -33,6 +34,8 @@ export function InputTask() {
   const [unknown, setUnknown] = useState<Set<string>>(new Set());
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [pronView, setPronView] = useState(false);
+  const pronMode = usePronMode();
 
   if (!task) {
     return (
@@ -98,24 +101,80 @@ export function InputTask() {
       </div>
 
       <section className="card p-6">
-        <h2 className="label">Text</h2>
-        <p className="mt-3 font-serif text-lg leading-relaxed text-ink-900">
-          {tokens.map((t) =>
-            t.word ? (
-              <button
-                key={t.key}
-                onClick={() => toggleWord(t.word)}
-                className={`transition ${
-                  unknown.has(t.word) ? 'bg-ochre-100 text-ochre-700 underline' : 'hover:bg-paper-dark'
-                }`}
-              >
-                {t.text}
-              </button>
-            ) : (
-              <span key={t.key}>{t.text}</span>
-            ),
+        <div className="flex items-center justify-between">
+          <h2 className="label">Text</h2>
+          {pronMode !== 'off' && task.textWithPronunciation && (
+            <button
+              type="button"
+              onClick={() => setPronView((v) => !v)}
+              className={`rounded-sm border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider transition ${
+                pronView
+                  ? 'border-ochre-500 bg-ochre-100 text-ochre-700'
+                  : 'border-ink-300 text-ink-500 hover:border-ink-500'
+              }`}
+            >
+              {pronView ? 'pronunciation view: on' : 'pronunciation view: off'}
+            </button>
           )}
-        </p>
+        </div>
+
+        {pronView && task.textWithPronunciation ? (
+          <div className="mt-3 space-y-3">
+            {task.textWithPronunciation.map((l, i) => (
+              <div key={i} className="border-b border-ink-200 pb-3 last:border-0">
+                <p className="font-serif text-lg leading-relaxed text-ink-900">{l.line}</p>
+                <p className="mt-1 font-mono text-[12px] tracking-wide text-ochre-700">
+                  {l.pronunciation}
+                </p>
+                {pronMode === 'full' && (
+                  <p className="font-mono text-[11px] text-ink-400">{l.ipa}</p>
+                )}
+              </div>
+            ))}
+            {pronMode === 'full' &&
+              task.targetPronunciationPoints &&
+              task.targetPronunciationPoints.length > 0 && (
+                <div className="border border-ink-200 bg-paper p-3">
+                  <h3 className="label">Watch these</h3>
+                  <ul className="mt-2 space-y-1">
+                    {task.targetPronunciationPoints.map((p, i) => (
+                      <li key={i} className="font-mono text-[12px] text-ink-700">
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                  {task.pronunciationNotes && task.pronunciationNotes.length > 0 && (
+                    <ul className="mt-2 space-y-0.5">
+                      {task.pronunciationNotes.map((n, i) => (
+                        <li key={i} className="flex gap-1.5 text-[11px] text-ink-500">
+                          <span className="text-rust-500">!</span>
+                          <span>{n}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+          </div>
+        ) : (
+          <p className="mt-3 font-serif text-lg leading-relaxed text-ink-900">
+            {tokens.map((t) =>
+              t.word ? (
+                <button
+                  key={t.key}
+                  onClick={() => toggleWord(t.word)}
+                  className={`transition ${
+                    unknown.has(t.word) ? 'bg-ochre-100 text-ochre-700 underline' : 'hover:bg-paper-dark'
+                  }`}
+                >
+                  {t.text}
+                </button>
+              ) : (
+                <span key={t.key}>{t.text}</span>
+              ),
+            )}
+          </p>
+        )}
 
         {task.glossary.length > 0 && (
           <div className="mt-5 border border-ink-200 bg-paper p-4">

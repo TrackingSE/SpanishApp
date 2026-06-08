@@ -7,6 +7,7 @@ const navItems = [
   { to: '/today', label: 'Today' },
   { to: '/roadmap', label: 'Roadmap' },
   { to: '/review', label: 'Review' },
+  { to: '/pronunciation', label: 'Pronunciation' },
   { to: '/settings', label: 'Settings' },
 ];
 

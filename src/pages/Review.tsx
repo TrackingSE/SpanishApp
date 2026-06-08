@@ -3,9 +3,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
+import { Pron } from '../components/Pron';
+import { usePronMode } from '../hooks/usePronMode';
 import { getDueCards } from '../lib/today';
 import { isDue } from '../lib/date';
 import type { CardType, Flashcard, Rating } from '../types';
+
+const PRODUCTION_TYPES: CardType[] = ['vocab_production', 'sentence_translation', 'cloze', 'grammar_pattern'];
 
 const TYPE_LABEL: Record<CardType, string> = {
   vocab_recognition: 'recognition',
@@ -45,6 +49,8 @@ export function Review() {
   const rateCard = useAppStore((s) => s.rateCard);
   const recordReviewSession = useAppStore((s) => s.recordReviewSession);
   const sessionLogged = useRef(false);
+  const pronMode = usePronMode();
+  const [showPron, setShowPron] = useState(pronMode !== 'off');
 
   // Build the review queue once, on first render (lazy state initializer).
   const [initialIds] = useState<string[]>(() => {
@@ -163,6 +169,17 @@ export function Review() {
 
       <div className="mb-3 flex items-center justify-between font-mono text-xs text-ink-500">
         <span>{done} done</span>
+        <button
+          type="button"
+          onClick={() => setShowPron((v) => !v)}
+          className={`rounded-sm border px-2 py-0.5 uppercase tracking-wider transition ${
+            showPron
+              ? 'border-ochre-500 bg-ochre-100 text-ochre-700'
+              : 'border-ink-300 text-ink-500 hover:border-ink-500'
+          }`}
+        >
+          {showPron ? 'pronunciation hints: on' : 'pronunciation hints: off'}
+        </button>
         <span>{queue.length} left</span>
       </div>
       <ProgressBar value={progressPct} className="mb-6" />
@@ -210,6 +227,21 @@ export function Review() {
             <p className="mt-1 font-serif text-2xl font-semibold text-ink-900">{card.back}</p>
             {card.type === 'cloze' && card.sentence && (
               <p className="mt-1 text-sm text-ink-500">{card.sentence.replace('____', card.back)}</p>
+            )}
+            {showPron && card.showPronunciationAfterAnswer && card.pronunciation && (
+              <div className="mt-3 flex flex-col items-center gap-1 border-t border-ink-200 pt-3">
+                <Pron
+                  data={{ pronunciation: card.pronunciation, ipa: card.ipa }}
+                  mode={pronMode === 'off' ? 'basic' : pronMode}
+                  showNotes={false}
+                  className="text-center"
+                />
+                {PRODUCTION_TYPES.includes(card.type) && (
+                  <p className="font-mono text-[11px] uppercase tracking-wider text-moss-700">
+                    ▸ say it aloud
+                  </p>
+                )}
+              </div>
             )}
             {needsTyping && typed && (
               <p className={`mt-2 text-sm font-medium ${answerCorrect ? 'text-moss-700' : 'text-rust-700'}`}>

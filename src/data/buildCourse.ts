@@ -15,6 +15,13 @@ import type {
 } from '../types';
 import { levelBundles } from './spanish';
 import type { NodeSeed } from './spanish/types';
+import {
+  enrichAssessment,
+  enrichCard,
+  enrichGrammar,
+  enrichInputTask,
+  enrichVocab,
+} from '../lib/enrichPron';
 
 // Assembles the full A1 -> C2 course from per-level content bundles.
 // Flashcards and tasks are generated deterministically so ids stay stable
@@ -324,8 +331,11 @@ function buildCourse(): Course {
   const spanishPool: string[] = levelBundles.flatMap((b) => b.vocab.map((v) => v.spanish));
 
   for (const bundle of levelBundles) {
+    // Fill written-pronunciation fields on every item before assembly.
+    const bundleVocab = bundle.vocab.map(enrichVocab);
+
     const nodeVocab = new Map<string, VocabItem[]>();
-    for (const v of bundle.vocab) {
+    for (const v of bundleVocab) {
       const list = nodeVocab.get(v.nodeId) ?? [];
       list.push(v);
       nodeVocab.set(v.nodeId, list);
@@ -333,12 +343,12 @@ function buildCourse(): Course {
 
     const grammarById = new Map(bundle.grammar.map((g) => [g.id, g]));
 
-    const flashcards = buildFlashcards(bundle.vocab, bundle.grammar, bundle.nodeSeeds);
+    const flashcards = buildFlashcards(bundleVocab, bundle.grammar, bundle.nodeSeeds).map(enrichCard);
     const isA1 = bundle.level === 'A1';
     const inputTasks = [
       ...buildInputTasks(bundle.nodeSeeds, nodeVocab, englishPool, spanishPool),
       ...(isA1 ? anchorInputTasks : []),
-    ];
+    ].map(enrichInputTask);
     const outputTasks = buildOutputTasks(bundle.nodeSeeds, nodeVocab, grammarById);
 
     // reverse-map grammar -> nodes within this level
@@ -350,10 +360,9 @@ function buildCourse(): Course {
         grammarNodes.set(gid, list);
       }
     }
-    const grammarWithNodes = bundle.grammar.map((g) => ({
-      ...g,
-      nodeIds: grammarNodes.get(g.id) ?? [],
-    }));
+    const grammarWithNodes = bundle.grammar.map((g) =>
+      enrichGrammar({ ...g, nodeIds: grammarNodes.get(g.id) ?? [] }),
+    );
 
     const unitOrder = new Map(bundle.units.map((u) => [u.id, u.order]));
     const colCounter = new Map<string, number>();
@@ -381,11 +390,11 @@ function buildCourse(): Course {
     allUnits.push(...bundle.units);
     allNodes.push(...nodes);
     allGrammar.push(...grammarWithNodes);
-    allVocab.push(...bundle.vocab);
+    allVocab.push(...bundleVocab);
     allFlashcards.push(...flashcards);
     allInputTasks.push(...inputTasks);
     allOutputTasks.push(...outputTasks);
-    assessments.push(bundle.assessment);
+    assessments.push(enrichAssessment(bundle.assessment));
 
     levelDefs.push({
       id: bundle.level,
