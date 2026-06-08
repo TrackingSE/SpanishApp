@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Spectral:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-paper text-ink-900 antialiased;
+    background-image: radial-gradient(rgba(35, 32, 25, 0.04) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  /* Chunky paper card with a hard offset shadow. */
+  .card {
+    @apply rounded-md border border-ink-300 bg-paper-card shadow-notebook;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-400 focus-visible:ring-offset-1 focus-visible:ring-offset-paper disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn border-ink-900 bg-ink-900 text-paper hover:bg-ink-800;
+  }
+
+  .btn-secondary {
+    @apply btn border-ink-300 bg-paper-card text-ink-800 hover:bg-paper-dark;
+  }
+
+  .btn-ghost {
+    @apply btn border-transparent text-ink-600 hover:bg-paper-dark;
+  }
+
+  .input-field {
+    @apply w-full rounded-md border border-ink-300 bg-paper-card px-3 py-2 text-sm text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-ink-500 focus:ring-1 focus:ring-ink-400;
+  }
+
+  /* Field-notebook tag: small, mono, uppercase. */
+  .tag {
+    @apply inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider;
+  }
+
+  .tag-ink {
+    @apply border-ink-300 bg-paper text-ink-600;
+  }
+  .tag-rust {
+    @apply border-rust-500/40 bg-rust-100 text-rust-700;
+  }
+  .tag-moss {
+    @apply border-moss-500/40 bg-moss-100 text-moss-700;
+  }
+  .tag-ochre {
+    @apply border-ochre-500/40 bg-ochre-100 text-ochre-700;
+  }
+
+  /* Section label, like a notebook margin heading. */
+  .label {
+    @apply font-mono text-[11px] font-medium uppercase tracking-widest text-ink-500;
+  }
+}
