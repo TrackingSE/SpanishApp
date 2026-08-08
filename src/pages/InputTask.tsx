@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
+import { SpeakButton } from '../components/SpeakButton';
 import { usePronMode } from '../hooks/usePronMode';
 import { THRESHOLDS } from '../lib/adaptive';
 
@@ -35,6 +36,8 @@ export function InputTask() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [pronView, setPronView] = useState(false);
+  // Listening tasks start with the transcript hidden — answer from sound first.
+  const [transcriptShown, setTranscriptShown] = useState(task?.type !== 'listening');
   const pronMode = usePronMode();
 
   if (!task) {
@@ -102,7 +105,22 @@ export function InputTask() {
 
       <section className="card p-6">
         <div className="flex items-center justify-between">
-          <h2 className="label">Text</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="label">Text</h2>
+            <SpeakButton
+              text={task.text}
+              variant="labeled"
+              label="Listen"
+              className="px-2 py-0.5 text-[11px]"
+            />
+            <SpeakButton
+              text={task.text}
+              variant="labeled"
+              label="Slower"
+              slow
+              className="px-2 py-0.5 text-[11px]"
+            />
+          </div>
           {pronMode !== 'off' && task.textWithPronunciation && (
             <button
               type="button"
@@ -118,7 +136,36 @@ export function InputTask() {
           )}
         </div>
 
-        {pronView && task.textWithPronunciation ? (
+        {task.type === 'listening' && !transcriptShown ? (
+          <div className="mt-4 flex flex-col items-center gap-3 border border-ink-200 bg-paper p-6 text-center">
+            <p className="font-mono text-xs uppercase tracking-wider text-ochre-700">♪ listening</p>
+            <div className="flex items-center gap-2">
+              <SpeakButton
+                text={task.text}
+                variant="labeled"
+                label="Play"
+                className="px-3 py-1.5 text-xs"
+              />
+              <SpeakButton
+                text={task.text}
+                variant="labeled"
+                label="Slower"
+                slow
+                className="px-3 py-1.5 text-xs"
+              />
+            </div>
+            <p className="max-w-md text-sm text-ink-500">
+              Listen, then answer the questions below. Reveal the transcript only if you get stuck.
+            </p>
+            <button
+              type="button"
+              onClick={() => setTranscriptShown(true)}
+              className="btn-secondary text-xs"
+            >
+              Show transcript
+            </button>
+          </div>
+        ) : pronView && task.textWithPronunciation ? (
           <div className="mt-3 space-y-3">
             {task.textWithPronunciation.map((l, i) => (
               <div key={i} className="border-b border-ink-200 pb-3 last:border-0">

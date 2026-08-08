@@ -4,12 +4,34 @@ import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
 import { ProgressBar } from '../components/ProgressBar';
 import { Pron } from '../components/Pron';
+import { SpeakButton } from '../components/SpeakButton';
 import { usePronMode } from '../hooks/usePronMode';
+import { speakSpanish } from '../lib/speech';
 import { getDueCards } from '../lib/today';
 import { isDue } from '../lib/date';
 import type { CardType, Flashcard, Rating } from '../types';
 
 const PRODUCTION_TYPES: CardType[] = ['vocab_production', 'sentence_translation', 'cloze', 'grammar_pattern'];
+
+// Cards whose front is already the Spanish side (safe to hear before reveal).
+const SPANISH_FRONT_TYPES: CardType[] = ['vocab_recognition', 'question_answer'];
+
+/** The Spanish text of a card, for text-to-speech. */
+function cardSpanish(card: Flashcard): string {
+  switch (card.type) {
+    case 'vocab_recognition':
+    case 'question_answer':
+      return card.front;
+    case 'audio_comprehension':
+      return card.sentence ?? card.back;
+    case 'cloze':
+      return card.sentence ? card.sentence.replace('____', card.back) : card.back;
+    case 'grammar_pattern':
+      return card.sentence ?? card.back;
+    default: // vocab_production, sentence_translation
+      return card.back;
+  }
+}
 
 const TYPE_LABEL: Record<CardType, string> = {
   vocab_recognition: 'recognition',
@@ -91,6 +113,15 @@ export function Review() {
       recordReviewSession();
     }
   }, [total, queue.length, done, recordReviewSession]);
+
+  // Listening cards: play the Spanish automatically when the card appears, so
+  // the learner answers from sound, not sight.
+  useEffect(() => {
+    if (card?.type === 'audio_comprehension' && !revealed) {
+      speakSpanish(cardSpanish(card), { rate: 0.85 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card?.id]);
 
   const answerCorrect = useMemo(() => {
     if (!card) return false;
@@ -195,7 +226,34 @@ export function Review() {
         <p className="text-center text-sm text-ink-600">{card.prompt}</p>
 
         <div className="py-6 text-center">
-          {card.type === 'cloze' ? (
+          {card.type === 'audio_comprehension' ? (
+            <div className="flex flex-col items-center gap-3 py-2">
+              {!revealed ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <SpeakButton
+                      text={cardSpanish(card)}
+                      variant="labeled"
+                      label="Play audio"
+                      className="px-3 py-1.5 text-xs"
+                    />
+                    <SpeakButton
+                      text={cardSpanish(card)}
+                      variant="labeled"
+                      label="Slower"
+                      slow
+                      className="px-3 py-1.5 text-xs"
+                    />
+                  </div>
+                  <p className="font-mono text-xs text-ink-400">listen, then answer</p>
+                </>
+              ) : (
+                <p className="font-serif text-2xl font-semibold text-ink-900 sm:text-3xl">
+                  {cardSpanish(card)}
+                </p>
+              )}
+            </div>
+          ) : card.type === 'cloze' ? (
             <>
               <p className="font-serif text-2xl font-semibold text-ink-900 sm:text-3xl">
                 {card.sentence}
@@ -203,7 +261,10 @@ export function Review() {
               <p className="mt-2 text-sm text-ink-500">{card.front}</p>
             </>
           ) : (
-            <p className="font-serif text-2xl font-semibold text-ink-900 sm:text-3xl">{card.front}</p>
+            <div className="flex items-center justify-center gap-2">
+              <p className="font-serif text-2xl font-semibold text-ink-900 sm:text-3xl">{card.front}</p>
+              {SPANISH_FRONT_TYPES.includes(card.type) && <SpeakButton text={cardSpanish(card)} />}
+            </div>
           )}
           {card.hint && !revealed && (
             <p className="mt-3 font-mono text-xs text-ochre-600">hint: {card.hint}</p>
@@ -228,6 +289,9 @@ export function Review() {
             {card.type === 'cloze' && card.sentence && (
               <p className="mt-1 text-sm text-ink-500">{card.sentence.replace('____', card.back)}</p>
             )}
+            <div className="mt-2 flex justify-center">
+              <SpeakButton text={cardSpanish(card)} variant="labeled" label="Hear it" />
+            </div>
             {showPron && card.showPronunciationAfterAnswer && card.pronunciation && (
               <div className="mt-3 flex flex-col items-center gap-1 border-t border-ink-200 pt-3">
                 <Pron

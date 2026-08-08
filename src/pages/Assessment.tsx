@@ -2,8 +2,10 @@ import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { PageHeader } from '../components/PageHeader';
+import { SpeakButton } from '../components/SpeakButton';
 import { assessmentForLevel } from '../data/buildCourse';
 import { retestAllowed, sessionsUntilRetest } from '../lib/levels';
+import { isSpeechRecognitionSupported, listenSpanish, scoreSpeech, type SpeechScore } from '../lib/speech';
 import { LEVEL_ORDER } from '../data/spanish';
 import type { AssessmentAnswer, AssessmentQuestion, CEFRLevel } from '../types';
 
@@ -173,6 +175,7 @@ function Question({
   const isWriting = q.type === 'writing_response';
   const isSpeaking = q.type === 'speaking_prompt';
   const isListening = q.section === 'listening';
+  const [transcriptShown, setTranscriptShown] = useState(!isListening);
 
   return (
     <div className="border-t border-ink-200 pt-4 first:border-0 first:pt-0">
@@ -182,27 +185,46 @@ function Question({
 
       {q.passage && (
         <div className="mt-2 border border-ink-200 bg-paper p-3 text-sm">
-          {isListening && (
-            <p className="mb-1 font-mono text-[11px] uppercase tracking-wider text-ochre-700">
-              ♪ audio placeholder — read once, then answer from memory
-            </p>
+          {isListening ? (
+            <div className="flex flex-col items-start gap-2">
+              <p className="font-mono text-[11px] uppercase tracking-wider text-ochre-700">
+                ♪ listening — play the audio, then answer
+              </p>
+              <div className="flex items-center gap-2">
+                <SpeakButton
+                  text={q.passage}
+                  variant="labeled"
+                  label="Play"
+                  className="px-2 py-0.5 text-[11px]"
+                />
+                <SpeakButton
+                  text={q.passage}
+                  variant="labeled"
+                  label="Slower"
+                  slow
+                  className="px-2 py-0.5 text-[11px]"
+                />
+              </div>
+              {transcriptShown ? (
+                <p className="font-serif text-ink-900">{q.passage}</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTranscriptShown(true)}
+                  className="font-mono text-[11px] text-ink-500 underline hover:text-ink-800"
+                >
+                  show transcript
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="font-serif text-ink-900">{q.passage}</p>
           )}
-          <p className="font-serif text-ink-900">{q.passage}</p>
         </div>
       )}
 
       {isSpeaking ? (
-        <button
-          type="button"
-          onClick={() => onChange({ userAnswer: draft.userAnswer === 'complete' ? '' : 'complete', markedUnknown: false })}
-          className={`mt-3 btn ${
-            draft.userAnswer === 'complete'
-              ? 'border-moss-500 bg-moss-100 text-moss-700'
-              : 'border-ink-300 bg-paper-card text-ink-800 hover:border-ink-500'
-          }`}
-        >
-          {draft.userAnswer === 'complete' ? 'Spoken aloud ✓' : 'I spoke it aloud — mark complete'}
-        </button>
+        <SpeakingCapture q={q} draft={draft} onChange={onChange} />
       ) : isWriting ? (
         <textarea
           className="input-field mt-3 min-h-[120px] resize-y text-base leading-relaxed"
@@ -246,6 +268,128 @@ function Question({
           Flag for review
         </Toggle>
       </div>
+    </div>
+  );
+}
+
+// Speaking capture (Phase 1 prototype). Uses the browser SpeechRecognition
+// API to actually hear the spoken answer, transcribe it, and — when the
+// question has a reference answer — score how close the words were. It still
+// sets userAnswer to 'complete' so the existing grader treats speaking the
+// same way. Browsers without recognition fall back to the honest self-mark.
+function SpeakingCapture({
+  q,
+  draft,
+  onChange,
+}: {
+  q: AssessmentQuestion;
+  draft: Draft;
+  onChange: (patch: Partial<Draft>) => void;
+}) {
+  const supported = isSpeechRecognitionSupported();
+  const [listening, setListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<SpeechScore | null>(null);
+  const [transcript, setTranscript] = useState('');
+
+  const target = q.expectedAnswer || q.acceptedAnswers?.[0] || '';
+  const done = draft.userAnswer === 'complete';
+
+  function start() {
+    setError(null);
+    setResult(null);
+    setTranscript('');
+    setListening(true);
+    listenSpanish(
+      (r) => {
+        setListening(false);
+        setTranscript(r.transcript);
+        if (target) setResult(scoreSpeech(target, r.transcript));
+        onChange({ userAnswer: 'complete', markedUnknown: false });
+      },
+      (err) => {
+        setListening(false);
+        setError(
+          err === 'not-allowed'
+            ? 'Microphone blocked. Allow mic access, or mark it complete manually.'
+            : err === 'no-speech'
+              ? 'No speech heard. Try again.'
+              : 'Could not capture speech. Mark it complete manually.',
+        );
+      },
+    );
+  }
+
+  if (!supported) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange({ userAnswer: done ? '' : 'complete', markedUnknown: false })}
+        className={`mt-3 btn ${
+          done
+            ? 'border-moss-500 bg-moss-100 text-moss-700'
+            : 'border-ink-300 bg-paper-card text-ink-800 hover:border-ink-500'
+        }`}
+      >
+        {done ? 'Spoken aloud ✓' : 'I spoke it aloud — mark complete'}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={start}
+          disabled={listening}
+          className={`btn ${
+            listening
+              ? 'border-ochre-500 bg-ochre-100 text-ochre-700'
+              : 'border-ink-300 bg-paper-card text-ink-800 hover:border-ink-500'
+          }`}
+        >
+          {listening ? '● listening…' : done ? 'Speak again' : 'Speak your answer'}
+        </button>
+        {done && (
+          <span className="font-mono text-[11px] uppercase tracking-wider text-moss-700">captured ✓</span>
+        )}
+      </div>
+
+      {transcript && (
+        <p className="text-sm text-ink-700">
+          <span className="label">you said</span>{' '}
+          <span className="font-serif text-ink-900">{transcript}</span>
+        </p>
+      )}
+
+      {result && (
+        <div className="border border-ink-200 bg-paper p-3">
+          <div className="flex items-center justify-between">
+            <span className="label">word match</span>
+            <span className="font-serif text-lg font-semibold text-ink-900">{result.score}%</span>
+          </div>
+          {result.missing.length > 0 && (
+            <p className="mt-1 font-mono text-[11px] text-rust-600">missed: {result.missing.join(', ')}</p>
+          )}
+          <p className="mt-1 font-mono text-[11px] text-ink-400">
+            prototype scoring — compares recognized words to the reference answer
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="space-y-2">
+          <p className="text-sm text-rust-700">{error}</p>
+          <button
+            type="button"
+            onClick={() => onChange({ userAnswer: 'complete', markedUnknown: false })}
+            className="btn border-ink-300 bg-paper-card text-ink-800 hover:border-ink-500"
+          >
+            Mark complete anyway
+          </button>
+        </div>
+      )}
     </div>
   );
 }
